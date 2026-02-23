@@ -7,6 +7,7 @@
 set_overridable_option(EXECUTORCH_BUILD_PYBIND ON)
 set_overridable_option(EXECUTORCH_BUILD_KERNELS_QUANTIZED ON)
 set_overridable_option(EXECUTORCH_BUILD_KERNELS_QUANTIZED_AOT ON)
+set_overridable_option(EXECUTORCH_BUILD_KERNELS_CUSTOM_AOT ON)
 # Enable logging even when in release mode. We are building for desktop, where
 # saving a few kB is less important than showing useful error information to
 # users.
