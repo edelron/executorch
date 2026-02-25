@@ -28,6 +28,7 @@ class ModuleTest : public ::testing::Test {
     add_mul_data_path_ = std::getenv("ET_MODULE_ADD_MUL_DATA_PATH");
     linear_path_ = std::getenv("ET_MODULE_LINEAR_PROGRAM_PATH");
     linear_data_path_ = std::getenv("ET_MODULE_LINEAR_DATA_PATH");
+    shared_state_path_ = std::getenv("ET_MODULE_SHARED_STATE");
   }
 
   static inline std::string model_path_;
@@ -35,6 +36,7 @@ class ModuleTest : public ::testing::Test {
   static inline std::string add_mul_data_path_;
   static inline std::string linear_path_;
   static inline std::string linear_data_path_;
+  static inline std::string shared_state_path_;
 };
 
 TEST_F(ModuleTest, TestLoad) {
@@ -553,4 +555,40 @@ TEST_F(ModuleTest, TestPTD_Multiple) {
   ASSERT_EQ(module_linear.load_method("forward"), Error::Ok);
   auto tensor2 = make_tensor_ptr({3}, {2.f, 3.f, 4.f});
   ASSERT_EQ(module_linear.forward(tensor2).error(), Error::Ok);
+}
+
+TEST_F(ModuleTest, TestSharedMemoryBuffer) {
+  Module module(
+      shared_state_path_,
+      Module::LoadMode::File,
+      /*event_tracer=*/nullptr,
+      /*memory_allocator=*/nullptr,
+      /*temp_allocator=*/nullptr,
+      /*share_memory_arenas=*/true);
+
+  ASSERT_EQ(module.load_method("forward"), Error::Ok);
+  ASSERT_EQ(module.load_method("get_state"), Error::Ok);
+  ASSERT_EQ(module.load_method("set_state"), Error::Ok);
+
+  EXPECT_TENSOR_CLOSE(
+      module.execute("get_state").get()[0].toTensor(),
+      *make_tensor_ptr({1}, {0.f}).get());
+  auto tensor = make_tensor_ptr({1}, {2.f});
+  EXPECT_TENSOR_CLOSE(
+      module.forward(tensor).get()[0].toTensor(),
+      *make_tensor_ptr({1}, {3.f}).get());
+  EXPECT_TENSOR_CLOSE(
+      module.forward(tensor).get()[0].toTensor(),
+      *make_tensor_ptr({1}, {4.f}).get());
+  EXPECT_TENSOR_CLOSE(
+      module.execute("get_state").get()[0].toTensor(),
+      *make_tensor_ptr({1}, {2.f}).get());
+  auto zero_tensor = make_tensor_ptr({1}, {0.f});
+  ASSERT_EQ(module.execute("set_state", zero_tensor).error(), Error::Ok);
+  EXPECT_TENSOR_CLOSE(
+      module.execute("get_state").get()[0].toTensor(),
+      *make_tensor_ptr({1}, {0.f}).get());
+  EXPECT_TENSOR_CLOSE(
+      module.forward(tensor).get()[0].toTensor(),
+      *make_tensor_ptr({1}, {3.f}).get());
 }
