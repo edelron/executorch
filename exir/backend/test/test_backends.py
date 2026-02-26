@@ -9,6 +9,7 @@ import unittest
 from typing import Dict, List
 
 import executorch.exir as exir
+import executorch.kernels.quantized  # noqa: F401
 import torch
 from executorch.exir import to_edge
 from executorch.exir.backend.backend_api import LoweredBackendModule, to_backend
@@ -987,9 +988,6 @@ class TestBackends(unittest.TestCase):
             _ = to_backend(ep.exported_program, BadPartitioner())
 
     def test_quantized_with_delegate(self) -> None:
-        torch.ops.load_library(
-            "//executorch/kernels/quantized:custom_ops_generated_lib"
-        )
         qconfig_mapping = get_default_qconfig_mapping("qnnpack")
         in_size = 2
         input_size = 3

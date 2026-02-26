@@ -8,6 +8,7 @@
 
 import unittest
 
+import executorch.kernels.quantized  # noqa: F401
 import torch
 import torchvision
 
@@ -31,9 +32,6 @@ from torchao.quantization.pt2e.quantize_pt2e import (
     convert_pt2e,
     prepare_pt2e,
 )
-
-# load executorch out variant ops
-torch.ops.load_library("//executorch/kernels/quantized:custom_ops_generated_lib")
 
 
 class TestQuantization(unittest.TestCase):

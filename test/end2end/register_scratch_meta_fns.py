@@ -15,14 +15,13 @@ in real use cases.
 """
 from typing import Dict, Optional
 
+import executorch.kernels.portable  # noqa: F401
 import torch
 from executorch.exir.operator.manip import (
     attach_get_scratch_metas_fn,
     ScratchTensorMetadata,
 )
 from executorch.exir.tensor import TensorSpec
-
-torch.ops.load_library("//executorch/kernels/portable:custom_ops_generated_lib")
 
 
 @attach_get_scratch_metas_fn(torch.ops.aten.linear.out)
