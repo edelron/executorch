@@ -37,6 +37,7 @@ from executorch.devtools.inspector._inspector_utils import (
     find_populated_event,
     gen_graphs_from_etrecord,
     get_aot_debug_handle_to_op_name_mapping,
+    get_aot_debug_handle_to_stack_trace_mapping,
     is_inference_output_equal,
     map_runtime_aot_intermediate_outputs,
     merge_runtime_overlapping_debug_handles,
@@ -498,6 +499,101 @@ class TestInspectorUtils(unittest.TestCase):
         debug_handle_to_op_name = get_aot_debug_handle_to_op_name_mapping(graph_module)
         expected_result = {}
         self.assertEqual(debug_handle_to_op_name, expected_result)
+
+    def test_get_aot_debug_handle_to_stack_trace_mapping_single_debug_handle(self):
+        # Create a simple graph module with one node that has a stack trace
+        graph_module = torch.fx.GraphModule({}, torch.fx.Graph())
+        node = graph_module.graph.create_node(
+            "call_function", target=torch.mul, args=(), kwargs={}, name="op1"
+        )
+        node.meta["debug_handle"] = 1
+        node.meta["stack_trace"] = "File 'test.py', line 10, in test_func\n    return x * y"
+        debug_handle_to_stack_trace = get_aot_debug_handle_to_stack_trace_mapping(
+            graph_module
+        )
+        expected_result = {
+            (1,): {
+                "op1": "File 'test.py', line 10, in test_func\n    return x * y"
+            }
+        }
+        self.assertEqual(debug_handle_to_stack_trace, expected_result)
+
+    def test_get_aot_debug_handle_to_stack_trace_mapping_multiple_debug_handles(self):
+        # Create a simple graph module with multiple nodes having stack traces
+        graph_module = torch.fx.GraphModule({}, torch.fx.Graph())
+        node1 = graph_module.graph.create_node(
+            "call_function", target=torch.mul, args=(), kwargs={}, name="op1"
+        )
+        node1.meta["debug_handle"] = (1, 2)
+        node1.meta["stack_trace"] = "File 'test.py', line 10\n    x * y"
+
+        node2 = graph_module.graph.create_node(
+            "call_function", target=torch.add, args=(), kwargs={}, name="op2"
+        )
+        node2.meta["debug_handle"] = 3
+        node2.meta["stack_trace"] = "File 'test.py', line 15\n    x + y"
+
+        debug_handle_to_stack_trace = get_aot_debug_handle_to_stack_trace_mapping(
+            graph_module
+        )
+        expected_result = {
+            (1, 2): {"op1": "File 'test.py', line 10\n    x * y"},
+            (3,): {"op2": "File 'test.py', line 15\n    x + y"},
+        }
+        self.assertEqual(debug_handle_to_stack_trace, expected_result)
+
+    def test_get_aot_debug_handle_to_stack_trace_mapping_no_stack_trace(self):
+        # Create a graph module with nodes that have no stack trace metadata
+        graph_module = torch.fx.GraphModule({}, torch.fx.Graph())
+        node = graph_module.graph.create_node(
+            "call_function", target=torch.mul, args=(), kwargs={}, name="op1"
+        )
+        node.meta["debug_handle"] = 1
+        # No stack_trace in metadata
+
+        debug_handle_to_stack_trace = get_aot_debug_handle_to_stack_trace_mapping(
+            graph_module
+        )
+        expected_result = {(1,): {"op1": None}}
+        self.assertEqual(debug_handle_to_stack_trace, expected_result)
+
+    def test_get_aot_debug_handle_to_stack_trace_mapping_no_nodes(self):
+        # Create an empty graph module
+        graph_module = torch.fx.GraphModule({}, torch.fx.Graph())
+        debug_handle_to_stack_trace = get_aot_debug_handle_to_stack_trace_mapping(
+            graph_module
+        )
+        expected_result = {}
+        self.assertEqual(debug_handle_to_stack_trace, expected_result)
+
+    def test_get_aot_debug_handle_to_stack_trace_mapping_same_debug_handle_multiple_ops(
+        self,
+    ):
+        # Create a graph module where multiple ops share the same debug handle
+        graph_module = torch.fx.GraphModule({}, torch.fx.Graph())
+        node1 = graph_module.graph.create_node(
+            "call_function", target=torch.mul, args=(), kwargs={}, name="op1"
+        )
+        node1.meta["debug_handle"] = 1
+        node1.meta["stack_trace"] = "File 'test.py', line 10\n    x * y"
+
+        node2 = graph_module.graph.create_node(
+            "call_function", target=torch.add, args=(), kwargs={}, name="op2"
+        )
+        node2.meta["debug_handle"] = 1  # Same debug handle as node1
+        node2.meta["stack_trace"] = "File 'test.py', line 15\n    x + y"
+
+        debug_handle_to_stack_trace = get_aot_debug_handle_to_stack_trace_mapping(
+            graph_module
+        )
+        # Both ops should be under the same debug handle key
+        expected_result = {
+            (1,): {
+                "op1": "File 'test.py', line 10\n    x * y",
+                "op2": "File 'test.py', line 15\n    x + y",
+            }
+        }
+        self.assertEqual(debug_handle_to_stack_trace, expected_result)
 
     def test_node_filter_match(self):
         node_filter = NodeFilter(
